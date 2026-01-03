@@ -28,13 +28,14 @@ public class bord {
         halfmoveClock++;
         fullmoveNumber = halfmoveClock /2;
 
-        move(move, toR, toC, piceRow, piceCol);
+        move(move, piceRow, piceCol);
     }
 
-    private void move(String move, int toR, int toC, int piceRow, int piceCol){
+    private void move(String move, int piceRow, int piceCol){
         int tomove = board[piceRow][piceCol];
         board[piceRow][piceCol] = 0;
-        board[toR][toC] = tomove;
+        int[] data = parseMove(move);
+        board[data[1]][data[2]] = tomove;
     }
 
     public void init(String fen) {
@@ -240,6 +241,31 @@ public class bord {
         moves.add(new bord(makeMove(piece, toR, toC), toR, toC, fromR, fromC, this));
     }
 
+    private int[] parseMove(String move) {
+        // piece
+        char pieceChar = move.charAt(0);
+        char lower = Character.toLowerCase(pieceChar);
+
+        int type = switch (lower) {
+            case 'p' -> 1;
+            case 'n' -> 2;
+            case 'b' -> 3;
+            case 'r' -> 4;
+            case 'q' -> 5;
+            case 'k' -> 6;
+            default -> -1;
+        };
+
+        // target square
+        char fileChar = move.charAt(1);
+        char rankChar = move.charAt(2);
+
+        int col = fileChar - 'A';
+        int row = '8' - rankChar;
+
+        return new int[] { type, row, col };
+    }
+
 
     private String makeMove(int type, int row, int col) {
     StringBuilder move = new StringBuilder();
@@ -270,5 +296,74 @@ public class bord {
     move.append(rank);
 
     return move.toString();
+}
+
+public bord() {
+    this.board = new int[8][8];
+    this.activePlayer = 'w'; // Set a default active player
+    this.castlingRights = new boolean[4]; // K, Q, k, q
+    this.enPassant = "-";
+    this.halfmoveClock = 0;
+    this.fullmoveNumber = 1; // Starting from the first move
+}
+
+public boolean moveFromNotation(String moveNotation) {
+    if (moveNotation == null || moveNotation.length() != 4) {
+        return false;
+    }
+
+    try {
+        // Parse Quellfeld (von)
+        char fromFile = moveNotation.charAt(0);
+        char fromRank = moveNotation.charAt(1);
+        int fromCol = fromFile - 'a';
+        int fromRow = '8' - fromRank;
+
+        // Parse Zielfeld (zu)
+        char toFile = moveNotation.charAt(2);
+        char toRank = moveNotation.charAt(3);
+        int toCol = toFile - 'a';
+        int toRow = '8' - toRank;
+
+        // Validiere Koordinaten
+        if (!inBounds(fromRow, fromCol) || !inBounds(toRow, toCol)) {
+            return false;
+        }
+
+        // Prüfe ob Feld besetzt ist
+        int piece = board[fromRow][fromCol];
+        if (piece == 0) {
+            return false;
+        }
+
+        // Prüfe ob richtige Seite am Zug ist
+        boolean whiteToMove = activePlayer == 'w';
+        if ((whiteToMove && piece <= 0) || (!whiteToMove && piece > 0)) {
+            return false;
+        }
+
+        // Prüfe ob Zielfeld leer oder gegnerisch besetzt ist
+        int targetPiece = board[toRow][toCol];
+        if (targetPiece != 0 && (piece > 0) == (targetPiece > 0)) {
+            return false; // Eigene Figur im Weg
+        }
+
+        // Führe den Zug aus
+        board[toRow][toCol] = piece;
+        board[fromRow][fromCol] = 0;
+
+        // Wechsle Spieler
+        activePlayer = (activePlayer == 'w') ? 'b' : 'w';
+        halfmoveClock++;
+        fullmoveNumber = halfmoveClock / 2;
+
+        // Speichere letzten Zug
+        lastMove = moveNotation;
+
+        return true;
+
+    } catch (Exception e) {
+        return false;
+    }
 }
 }
