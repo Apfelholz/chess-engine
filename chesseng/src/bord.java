@@ -1,75 +1,274 @@
 import java.util.HashMap;
+import java.util.Map;
+import java.util.Arrays;
+import java.util.ArrayList;
 
 public class bord {
-    public int[][] lineUp;
-    public char player;
-    public boolean[] castling;
-    public char[] EnPassant;
-    public int halfmove;
-    public int move;
+    public int[][] board = new int[8][8];
+    public char activePlayer;
+    public boolean[] castlingRights = new boolean[4]; // K, Q, k, q
+    public String enPassant = "-";
+    public int halfmoveClock;
+    public int fullmoveNumber;
 
-    public void init(String inLineUp) {
+    public String lastMove = "";
+    public bord lastBord;
 
-        HashMap<Character, Integer> encoding = new HashMap<>();
-        encoding.put('P', 1); 
-        encoding.put('N', 2); 
+    public bord(String move, int toR, int toC, int piceRow, int piceCol, bord lastbord){
+        this.lastMove = move;
+        this.lastBord = lastbord;
+
+        this.board = lastbord.board.clone();
+        if (this.activePlayer == 'w'){
+            this.activePlayer = 'b';
+        }else {
+            this.activePlayer = 'w';
+        }
+
+        halfmoveClock++;
+        fullmoveNumber = halfmoveClock /2;
+
+        move(move, toR, toC, piceRow, piceCol);
+    }
+
+    private void move(String move, int toR, int toC, int piceRow, int piceCol){
+        int tomove = board[piceRow][piceCol];
+        board[piceRow][piceCol] = 0;
+        board[toR][toC] = tomove;
+    }
+
+    public void init(String fen) {
+        Map<Character, Integer> encoding = new HashMap<>();
+        encoding.put('P', 1);
+        encoding.put('N', 2);
         encoding.put('B', 3);
-        encoding.put('R', 4); 
-        encoding.put('Q', 5); 
+        encoding.put('R', 4);
+        encoding.put('Q', 5);
         encoding.put('K', 6);
-        encoding.put('p', -1); 
-        encoding.put('n', -2); 
+        encoding.put('p', -1);
+        encoding.put('n', -2);
         encoding.put('b', -3);
-        encoding.put('r', -4); 
-        encoding.put('q', -5); 
+        encoding.put('r', -4);
+        encoding.put('q', -5);
         encoding.put('k', -6);
 
-        int line = 0;
-        int col = 0;
+        String[] parts = fen.split(" ");
+        if (parts.length < 6) {
+            throw new IllegalArgumentException("Invalid FEN: expected 6 space-separated fields");
+        }
 
-        for (char c : inLineUp.substring(0, 71).toCharArray()){
-            if (c == '/'){
-                line++;
+        String placement = parts[0];
+        String active = parts[1];
+        String castling = parts[2];
+        String ep = parts[3];
+
+        // Clear board
+        for (int r = 0; r < 8; r++) {
+            Arrays.fill(board[r], 0);
+        }
+
+        int rank = 0;
+        int file = 0;
+        for (char c : placement.toCharArray()) {
+            if (c == '/') {
+                rank++;
+                file = 0;
                 continue;
             }
-            lineUp[line][col] = encoding.get(c);
-            col++;
-        }
-
-        for (char c : inLineUp.split(" ")[1].toCharArray()){
-           if (c == '-'){
-            break;
-           }
-
-           if (c == 'K'){
-            castling[0] = true;
-           }else if (c == 'Q'){
-            castling[1] = true;
-           }else if (c == 'k'){
-            castling[2] = true;
-           }else if (c == 'q'){
-            castling[3] = true;
-           }
-        }
-
-        int i = 0;
-
-        for (char c : inLineUp.split(" ")[2].toCharArray()){
-            if (c == '-'){
-                break;
-            }else {
-                if (i == 0){
-                    EnPassant[0] = c;
-                    i++;
+            if (Character.isDigit(c)) {
+                int empties = c - '0';
+                for (int i = 0; i < empties; i++) {
+                    if (rank >= 8 || file >= 8) break;
+                    board[rank][file++] = 0;
                 }
-                if (i == 1){
-                    EnPassant[1] = c;
+                continue;
+            }
+            Integer val = encoding.get(c);
+            board[rank][file++] = (val != null) ? val : 0;
+        }
+
+        activePlayer = active.charAt(0);
+
+        Arrays.fill(castlingRights, false);
+        if (!"-".equals(castling)) {
+            for (char c : castling.toCharArray()) {
+                switch (c) {
+                    case 'K': castlingRights[0] = true; break;
+                    case 'Q': castlingRights[1] = true; break;
+                    case 'k': castlingRights[2] = true; break;
+                    case 'q': castlingRights[3] = true; break;
                 }
             }
         }
 
-        halfmove = Integer.parseInt(inLineUp.split(" ")[3]);
+        enPassant = "-".equals(ep) ? "-" : ep;
 
-        move = Integer.parseInt(inLineUp.split(" ")[4]);
+        try {
+            halfmoveClock = Integer.parseInt(parts[4]);
+            fullmoveNumber = Integer.parseInt(parts[5]);
+        } catch (NumberFormatException e) {
+            throw new IllegalArgumentException("Invalid move counters in FEN", e);
+        }
     }
+
+    public ArrayList<bord> getMoves() {
+        ArrayList<bord> moves = new ArrayList<>();
+
+        boolean whiteToMove = activePlayer == 'w';
+
+        for (int row = 0; row < 8; row++) {
+            for (int col = 0; col < 8; col++) {
+                int piece = board[row][col];
+                if (piece == 0) continue;
+
+                if (whiteToMove && piece > 0) {
+                    generatePieceMoves(piece, row, col, moves);
+                } else if (!whiteToMove && piece < 0) {
+                    generatePieceMoves(piece, row, col, moves);
+                }
+            }
+        }
+        return moves;
+    }
+
+    private void generatePieceMoves(int piece, int row, int col, ArrayList<bord> moves) {
+    int abs = Math.abs(piece);
+        switch (abs) {
+            case 1 -> generatePawnMoves(piece, row, col, moves);
+            case 2 -> generateKnightMoves(piece, row, col, moves);
+            case 3 -> generateSlidingMoves(piece, row, col, moves, BISHOP_DIRS);
+            case 4 -> generateSlidingMoves(piece, row, col, moves, ROOK_DIRS);
+            case 5 -> generateSlidingMoves(piece, row, col, moves, QUEEN_DIRS);
+            case 6 -> generateKingMoves(piece, row, col, moves);
+        }
+    }
+
+    private void generatePawnMoves(int piece, int row, int col, ArrayList<bord> moves) {
+        int dir = piece > 0 ? -1 : 1;
+        int startRow = piece > 0 ? 6 : 1;
+
+        // one forward
+        if (inBounds(row + dir, col) && board[row + dir][col] == 0) {
+            addMove(piece, row, col, row + dir, col, moves);
+
+            // two forward
+            if (row == startRow && board[row + 2 * dir][col] == 0) {
+                addMove(piece, row, col, row + 2 * dir, col, moves);
+            }
+        }
+
+        // captures
+        for (int dc : new int[]{-1, 1}) {
+            int r = row + dir;
+            int c = col + dc;
+            if (inBounds(r, c) && board[r][c] * piece < 0) {
+                addMove(piece, row, col, r, c, moves);
+            }
+        }
+    }
+
+    private static final int[][] KNIGHT_MOVES = {
+        {-2, -1}, {-2, 1}, {-1, -2}, {-1, 2},
+        {1, -2}, {1, 2}, {2, -1}, {2, 1}
+    };
+
+    private void generateKnightMoves(int piece, int row, int col, ArrayList<bord> moves) {
+        for (int[] d : KNIGHT_MOVES) {
+            int r = row + d[0];
+            int c = col + d[1];
+            if (!inBounds(r, c)) continue;
+            if (board[r][c] * piece <= 0) {
+                addMove(piece, row, col, r, c, moves);
+            }
+        }
+    }
+
+    private static final int[][] BISHOP_DIRS = {
+        {-1, -1}, {-1, 1}, {1, -1}, {1, 1}
+    };
+    private static final int[][] ROOK_DIRS = {
+            {-1, 0}, {1, 0}, {0, -1}, {0, 1}
+    };
+    private static final int[][] QUEEN_DIRS = {
+            {-1, -1}, {-1, 1}, {1, -1}, {1, 1},
+            {-1, 0}, {1, 0}, {0, -1}, {0, 1}
+    };
+
+    private void generateSlidingMoves(int piece, int row, int col, ArrayList<bord> moves, int[][] dirs) {
+        for (int[] d : dirs) {
+            int r = row + d[0];
+            int c = col + d[1];
+
+            while (inBounds(r, c)) {
+                if (board[r][c] == 0) {
+                    addMove(piece, row, col, r, c, moves);
+                } else {
+                    if (board[r][c] * piece < 0) {
+                        addMove(piece, row, col, r, c, moves);
+                    }
+                    break;
+                }
+                r += d[0];
+                c += d[1];
+            }
+        }
+    }
+
+    private static final int[][] KING_MOVES = {
+            {-1, -1}, {-1, 0}, {-1, 1},
+            {0, -1},           {0, 1},
+            {1, -1}, {1, 0}, {1, 1}
+    };
+
+    private void generateKingMoves(int piece, int row, int col, ArrayList<bord> moves) {
+        for (int[] d : KING_MOVES) {
+            int r = row + d[0];
+            int c = col + d[1];
+            if (!inBounds(r, c)) continue;
+            if (board[r][c] * piece <= 0) {
+                addMove(piece, row, col, r, c, moves);
+            }
+        }
+        // TODO: castling
+    }
+
+    private boolean inBounds(int r, int c) {
+        return r >= 0 && r < 8 && c >= 0 && c < 8;
+    }
+
+    private void addMove(int piece, int fromR, int fromC, int toR, int toC, ArrayList<bord> moves) {
+        moves.add(new bord(makeMove(piece, toR, toC), toR, toC, fromR, fromC, this));
+    }
+
+
+    private String makeMove(int type, int row, int col) {
+    StringBuilder move = new StringBuilder();
+
+    // piece letter
+    char pieceChar = switch (type) {
+        case 1 -> 'p';
+        case 2 -> 'n';
+        case 3 -> 'b';
+        case 4 -> 'r';
+        case 5 -> 'q';
+        case 6 -> 'k';
+        default -> '?';
+    };
+
+    // black pieces uppercase
+    if (activePlayer == 'b') {
+        pieceChar = Character.toUpperCase(pieceChar);
+    }
+
+    move.append(pieceChar);
+
+    // target square
+    char file = (char) ('A' + col);
+    char rank = (char) ('8' - row);
+
+    move.append(file);
+    move.append(rank);
+
+    return move.toString();
+}
 }
