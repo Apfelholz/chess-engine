@@ -7,13 +7,16 @@ public class App {
     static bord currentBoard;
     
     public static void main(String[] args) throws Exception {
-        System.out.println("id name chesseng");
-        System.out.println("uciok");
 
         BufferedReader r = new BufferedReader(
             new InputStreamReader(System.in));
 
-        if (r.readLine() == "isready"){
+        if (r.readLine().equals("uci")){
+            System.out.println("id name chesseng");
+            System.out.println("uciok");
+        }
+
+        if (r.readLine().equals("isready")){
             System.out.println("readyok");
         }
 
@@ -23,14 +26,20 @@ public class App {
         currentBoard = new bord();
         currentBoard.init(startpos);
 
-        while(comand != "exit"){
+        Boolean posReady = false;
+
+        while(!comand.equals("exit")){
             comand = r.readLine();
-            
-            if (comand != null && comand.startsWith("position")) {
+
+            if (comand.equals("isready")){
+                System.out.println("readyok");
+            }else if (comand.startsWith("position")){
+                posReady = true;
+            }else if (comand.startsWith("go") && posReady) {
                 parsePosition(comand);
-                System.out.println(getbestmove(comand));
+                System.out.println("bestmove " + getbestmove(comand));
             } else {
-                System.out.println("broken...");
+                System.out.println("------ comand unprossasbil: " + comand);
             }
         }
     }
