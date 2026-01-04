@@ -35,8 +35,8 @@ public class App {
                 System.out.println("readyok");
             }else if (comand.startsWith("position")){
                 posReady = true;
-            }else if (comand.startsWith("go") && posReady) {
                 parsePosition(comand);
+            }else if (comand.startsWith("go") && posReady) {
                 System.out.println("bestmove " + getbestmove(comand));
             } else {
                 System.out.println("------ comand unprossasbil: " + comand);
@@ -88,11 +88,83 @@ public class App {
     }
     
     static private void applyMove(String move) {
-        
+        currentBoard.moveFromNotation(move);
+        System.out.println(move);
     }
 
     static private String getbestmove(String comand){
+        // EINSTELLUNG: Anzahl der Ebenen für die Breitensuche
+        int SEARCH_DEPTH = 3;
+        
         ArrayList<bord> moves = currentBoard.getMoves();
-        return moves.getFirst().lastMove;
+        
+        if (moves.isEmpty()) {
+            return "0000"; // Keine legalen Züge verfügbar
+        }
+        
+        String bestMove = moves.get(0).lastMove;
+        int bestEval = Integer.MIN_VALUE;
+        boolean maximizing = currentBoard.activePlayer == 'w';
+        
+        // Für jeden möglichen ersten Zug
+        for (bord firstMove : moves) {
+            int eval = breadthFirstSearch(firstMove, SEARCH_DEPTH - 1, !maximizing);
+            
+            // Beste Bewertung für den aktuellen Spieler finden
+            if (maximizing) {
+                if (eval > bestEval) {
+                    bestEval = eval;
+                    bestMove = firstMove.lastMove;
+                }
+            } else {
+                if (eval < bestEval || bestEval == Integer.MIN_VALUE) {
+                    bestEval = eval;
+                    bestMove = firstMove.lastMove;
+                }
+            }
+        }
+        
+        return bestMove;
+    }
+
+    static private int breadthFirstSearch(bord position, int depth, boolean maximizing) {
+        // Basis-Fall: Maximale Tiefe erreicht
+        if (depth == 0) {
+            return position.eval;
+        }
+        
+        ArrayList<bord> moves = position.getMoves();
+        
+        // Keine legalen Züge mehr (Schachmatt oder Patt)
+        if (moves.isEmpty()) {
+            return position.eval;
+        }
+        
+        if (maximizing) {
+            int maxEval = Integer.MIN_VALUE;
+            // Alle Züge auf dieser Ebene durchgehen
+            for (bord move : moves) {
+                int eval = breadthFirstSearch(move, depth - 1, false);
+                maxEval = Math.max(maxEval, eval);
+            }
+            return maxEval;
+        } else {
+            int minEval = Integer.MAX_VALUE;
+            // Alle Züge auf dieser Ebene durchgehen
+            for (bord move : moves) {
+                int eval = breadthFirstSearch(move, depth - 1, true);
+                minEval = Math.min(minEval, eval);
+            }
+            return minEval;
+        }
+    }
+
+    static public void printBoard(bord bord){
+        for (int rank = 7; rank >= 0; rank--) {
+            for (int file = 0; file < 8; file++) {
+                System.out.print(bord.board[rank][file] + " ");
+            }
+            System.out.println();
+        }
     }
 }
